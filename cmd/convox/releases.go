@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/convox/rack/client"
 	"github.com/convox/rack/cmd/convox/helpers"
 	"github.com/convox/rack/cmd/convox/stdcli"
+	"github.com/convox/rack/options"
+	"github.com/convox/rack/structs"
 )
 
 func init() {
@@ -32,6 +35,29 @@ func init() {
 			},
 		},
 		Subcommands: []cli.Command{
+			{
+				Name:        "create",
+				Description: "create a new release",
+				Usage:       "",
+				Action:      cmdReleaseCreate,
+				Flags: []cli.Flag{
+					appFlag,
+					rackFlag,
+					cli.StringFlag{
+						Name:  "build",
+						Usage: "build id",
+					},
+					cli.StringFlag{
+						Name:  "manifest",
+						Usage: "manifest file",
+					},
+					cli.BoolFlag{
+						Name:   "wait",
+						EnvVar: "CONVOX_WAIT",
+						Usage:  "wait for release to finish promoting before returning",
+					},
+				},
+			},
 			{
 				Name:        "info",
 				Description: "see info about a release",
@@ -96,6 +122,40 @@ func cmdReleases(c *cli.Context) error {
 	}
 
 	t.Print()
+	return nil
+}
+
+func cmdReleaseCreate(c *cli.Context) error {
+	stdcli.NeedHelp(c)
+
+	_, app, err := stdcli.DirApp(c, ".")
+	if err != nil {
+		return stdcli.Error(err)
+	}
+
+	opts := structs.ReleaseCreateOptions{}
+
+	if v := c.String("build"); v != "" {
+		opts.Build = options.String(v)
+	}
+
+	if v := c.String("manifest"); v != "" {
+		data, err := ioutil.ReadFile(v)
+		if err != nil {
+			return stdcli.Error(err)
+		}
+
+		opts.Manifest = options.String(string(data))
+	}
+
+	stdcli.Startf("Creating release")
+	r, err := rack(c).ReleaseCreate(app, opts)
+	if err != nil {
+		return stdcli.Error(err)
+	}
+
+	stdcli.Writef("<ok>OK</ok>, <release>%s</release>\n", r.Id)
+
 	return nil
 }
 
